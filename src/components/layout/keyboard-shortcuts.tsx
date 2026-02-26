@@ -25,11 +25,6 @@ export function KeyboardShortcuts() {
           e.preventDefault();
           router.push("/pipeline");
           break;
-        case "d":
-          // Go to digest
-          e.preventDefault();
-          router.push("/digest");
-          break;
         case "r":
           // Go to report
           e.preventDefault();

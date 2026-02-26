@@ -76,7 +76,6 @@ export function CommandPalette() {
   const pages = [
     { label: t("nav.dashboard"), href: "/", icon: gridIcon },
     { label: t("nav.pipeline"), href: "/pipeline", icon: barsIcon },
-    { label: t("nav.digest"), href: "/digest", icon: calendarIcon },
     { label: t("nav.settings"), href: "/settings", icon: settingsIcon },
     { label: t("report.title"), href: "/report", icon: reportIcon },
   ];

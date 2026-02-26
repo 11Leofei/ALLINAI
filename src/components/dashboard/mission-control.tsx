@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from "react";
 import useSWR from "swr";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,17 +35,11 @@ interface FocusProject {
   id: string;
   name: string;
   stage: string;
-  priority: number;
-  momentum: number;
-  score: number;
   reasons: string[];
-  daysInStage: number;
-  pendingCommitments: number;
-  validationProgress: number;
 }
 
 export function MissionControl() {
-  const { locale, stageLabel } = useLocale();
+  const { locale } = useLocale();
   const { projects } = useProjects();
   const activeProjects = projects.filter((p) => p.stage !== "archived");
 
@@ -72,28 +65,25 @@ export function MissionControl() {
     todayTotal > 0 ? Math.round((todayDone / todayTotal) * 100) : 0;
 
   const focus: FocusProject | null = focusData?.focus || null;
-  const isUrgent = focusData?.message === "urgent";
   const streak = accountData?.streak || 0;
-  const score = accountData?.score || 0;
 
   const hour = new Date().getHours();
-  const greeting =
-    locale === "zh"
-      ? hour < 12
-        ? "早上好"
-        : hour < 18
-        ? "下午好"
-        : "晚上好"
-      : hour < 12
-      ? "Good morning"
-      : hour < 18
-      ? "Good afternoon"
-      : "Good evening";
+
+  // Time-aware mode
+  const mode: "morning" | "afternoon" | "evening" =
+    hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
 
   // Init cron
   useEffect(() => {
     fetch("/api/cron").catch(() => {});
   }, []);
+
+  // Emotional state
+  const allDone =
+    todayTotal > 0 && todayDone === todayTotal && overdueCount === 0;
+  const hasTrouble =
+    overdueCount > 0 || (todayTotal > 0 && todayDone === 0 && hour >= 15);
+  const noCommitments = todayTotal === 0 && overdueCount === 0;
 
   const handleToggle = async (id: string, currentState: number) => {
     const completing = !currentState;
@@ -109,12 +99,8 @@ export function MissionControl() {
       ).length;
       if (remaining === 0 && todayTotal > 0) {
         toast.success(
-          locale === "zh"
-            ? `今日 ${todayTotal} 个承诺全部完成！`
-            : `All ${todayTotal} commitments done today!`
+          locale === "zh" ? "今日承诺全部完成！" : "All commitments done today!"
         );
-      } else {
-        toast.success(locale === "zh" ? "完成！继续加油" : "Done! Keep going");
       }
     }
   };
@@ -124,162 +110,184 @@ export function MissionControl() {
     mutateCommitments();
   };
 
-  // Determine overall mood
-  const allDone = todayTotal > 0 && todayDone === todayTotal && overdueCount === 0;
-  const hasTrouble = overdueCount > 0 || (todayTotal > 0 && todayDone === 0 && hour >= 15);
-
-  const borderClass = allDone
-    ? "border-green-200 dark:border-green-800 bg-gradient-to-br from-green-50/80 to-emerald-50/50 dark:from-green-950/20 dark:to-emerald-950/10"
+  // Dynamic background
+  const bgClass = allDone
+    ? "bg-green-50 dark:bg-green-950/20"
     : hasTrouble
-    ? "border-red-200 dark:border-red-800 bg-gradient-to-br from-red-50/80 to-orange-50/50 dark:from-red-950/20 dark:to-orange-950/10"
-    : "bg-gradient-to-br from-slate-50/80 to-blue-50/50 dark:from-slate-950/20 dark:to-blue-950/10";
+    ? "bg-red-50 dark:bg-red-950/15"
+    : noCommitments && mode === "morning"
+    ? "bg-blue-50 dark:bg-blue-950/15"
+    : "";
+
+  // Time-aware greeting & message
+  const greeting =
+    locale === "zh"
+      ? mode === "morning"
+        ? "早上好"
+        : mode === "afternoon"
+        ? "下午好"
+        : "晚上好"
+      : mode === "morning"
+      ? "Good morning"
+      : mode === "afternoon"
+      ? "Good afternoon"
+      : "Good evening";
+
+  const subtitle = _getSubtitle(
+    locale,
+    mode,
+    todayDone,
+    todayTotal,
+    overdueCount,
+    focus
+  );
 
   return (
-    <Card className={`p-5 ${borderClass}`}>
-      {/* Row 1: Greeting + Stats */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3">
-            <p className="text-lg font-bold">{greeting}</p>
-            {streak > 0 && (
-              <span className="text-xs text-orange-600 flex items-center gap-0.5">
-                <span>🔥</span>
-                <span className="font-semibold">
-                  {streak}
-                  {locale === "zh" ? "天" : "d"}
-                </span>
-              </span>
-            )}
-            {score > 0 && (
-              <Badge
-                variant={
-                  score >= 70
-                    ? "default"
-                    : score >= 40
-                    ? "secondary"
-                    : "destructive"
-                }
-                className="text-xs"
-              >
-                {locale === "zh" ? `执行力 ${score}` : `Score ${score}`}
-              </Badge>
-            )}
-          </div>
-          {/* Smart summary */}
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {_buildSummary(locale, todayDone, todayTotal, overdueCount, focus)}
-          </p>
-        </div>
-
-        {/* Focus project quick link */}
-        {focus && (
-          <Link
-            href={`/projects/${focus.id}`}
-            className={`flex-shrink-0 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isUrgent
-                ? "bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60"
-                : "bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
-            }`}
-          >
-            <span className="text-xs text-muted-foreground block">
-              {isUrgent
-                ? locale === "zh"
-                  ? "现在该做"
-                  : "Do NOW"
-                : locale === "zh"
-                ? "建议专注"
-                : "Focus on"}
-            </span>
-            <span className="truncate max-w-40 block">{focus.name}</span>
-            {focus.reasons[0] && (
-              <span className="text-xs opacity-70 block truncate max-w-40">
-                {focus.reasons[0]}
-              </span>
-            )}
-          </Link>
+    <div className={`rounded-xl p-5 transition-colors ${bgClass}`}>
+      {/* Greeting + streak */}
+      <div className="flex items-center gap-3 mb-1">
+        <h1 className="text-xl font-bold">{greeting}</h1>
+        {streak > 0 && (
+          <span className="text-sm text-orange-600">
+            🔥 {streak}
+            {locale === "zh" ? " 天" : "d"}
+          </span>
         )}
       </div>
 
-      {/* Row 2: Today's progress bar */}
+      {/* Smart subtitle */}
+      <p
+        className={`text-sm mb-4 ${
+          allDone
+            ? "text-green-700 dark:text-green-400 font-medium"
+            : hasTrouble
+            ? "text-red-700 dark:text-red-400 font-medium"
+            : "text-muted-foreground"
+        }`}
+      >
+        {subtitle}
+      </p>
+
+      {/* Progress bar (only when there are items) */}
       {todayTotal > 0 && (
-        <div className="mt-3 flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-4">
           <Progress value={progress} className="h-2 flex-1" />
-          <span className="text-xs font-medium text-muted-foreground w-12 text-right">
+          <span className="text-sm font-mono font-medium text-muted-foreground">
             {todayDone}/{todayTotal}
           </span>
         </div>
       )}
 
-      {/* Row 3: Commitment list — always visible */}
-      <div className="mt-3 space-y-1">
-        {/* Overdue first */}
-        {overdueItems.map((c) => (
-          <div
-            key={c.id}
-            className="flex items-center gap-2.5 p-1.5 rounded-lg bg-red-100/60 dark:bg-red-900/20"
-          >
-            <Checkbox
-              checked={!!c.isCompleted}
-              onCheckedChange={() => handleToggle(c.id, c.isCompleted)}
-            />
-            <span className="text-sm flex-1 truncate">{c.commitment}</span>
-            <span className="text-xs text-muted-foreground hidden sm:inline">
-              {c.projectName}
-            </span>
-            <Badge variant="destructive" className="text-xs">
-              {locale === "zh"
-                ? `拖了 ${c.delayedDays} 天`
-                : `${c.delayedDays}d late`}
-            </Badge>
-            <button
-              className="text-xs text-muted-foreground hover:text-destructive"
-              onClick={() => handleDelete(c.id)}
-            >
-              ✕
-            </button>
+      {/* === Overdue debts === */}
+      {overdueItems.length > 0 && (
+        <div className="mb-3">
+          <p className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1.5">
+            {locale === "zh" ? "你欠的" : "YOUR DEBTS"}
+          </p>
+          <div className="space-y-1">
+            {overdueItems.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center gap-2.5 p-2 rounded-lg bg-red-100/70 dark:bg-red-900/20"
+              >
+                <Checkbox
+                  checked={!!c.isCompleted}
+                  onCheckedChange={() => handleToggle(c.id, c.isCompleted)}
+                />
+                <span className="text-sm flex-1 truncate">{c.commitment}</span>
+                <span className="text-xs text-muted-foreground hidden sm:inline">
+                  {c.projectName}
+                </span>
+                <Badge variant="destructive" className="text-xs">
+                  {locale === "zh"
+                    ? `拖了 ${c.delayedDays} 天`
+                    : `${c.delayedDays}d late`}
+                </Badge>
+                <button
+                  className="text-xs text-muted-foreground hover:text-destructive"
+                  onClick={() => handleDelete(c.id)}
+                  title={locale === "zh" ? "放弃" : "Abandon"}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
+      )}
 
-        {/* Today items */}
-        {todayItems.map((c) => (
-          <div
-            key={c.id}
-            className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-accent/50"
-          >
-            <Checkbox
-              checked={!!c.isCompleted}
-              onCheckedChange={() => handleToggle(c.id, c.isCompleted)}
-            />
-            <span
-              className={`text-sm flex-1 truncate ${
-                c.isCompleted ? "line-through text-muted-foreground" : ""
-              }`}
-            >
-              {c.commitment}
-            </span>
-            <span className="text-xs text-muted-foreground hidden sm:inline">
-              {c.projectName}
-            </span>
+      {/* === Today's commitments === */}
+      {todayItems.length > 0 && (
+        <div className="mb-3">
+          {overdueItems.length > 0 && (
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+              {locale === "zh" ? "今天" : "TODAY"}
+            </p>
+          )}
+          <div className="space-y-1">
+            {todayItems.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-accent/50 transition-colors"
+              >
+                <Checkbox
+                  checked={!!c.isCompleted}
+                  onCheckedChange={() => handleToggle(c.id, c.isCompleted)}
+                />
+                <span
+                  className={`text-sm flex-1 truncate ${
+                    c.isCompleted
+                      ? "line-through text-muted-foreground"
+                      : ""
+                  }`}
+                >
+                  {c.commitment}
+                </span>
+                <span className="text-xs text-muted-foreground hidden sm:inline">
+                  {c.projectName}
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
+      )}
 
-        {/* All done message */}
-        {allDone && (
-          <p className="text-sm text-green-600 font-medium py-1">
+      {/* All done state */}
+      {allDone && (
+        <p className="text-sm text-green-700 dark:text-green-400 font-medium py-2">
+          {locale === "zh" ? "✓ 今天做到了。" : "✓ You delivered today."}
+        </p>
+      )}
+
+      {/* Evening review nudge */}
+      {mode === "evening" &&
+        todayTotal > 0 &&
+        todayDone < todayTotal &&
+        !allDone && (
+          <p className="text-xs text-red-600 dark:text-red-400 mt-1 mb-2">
             {locale === "zh"
-              ? `✓ 今日 ${todayTotal} 个承诺全部完成！`
-              : `✓ All ${todayTotal} commitments done!`}
+              ? `还剩 ${todayTotal - todayDone} 个承诺没完成。今天要交代清楚再走。`
+              : `${todayTotal - todayDone} commitments unfinished. Wrap up before you call it a day.`}
           </p>
         )}
 
-        {/* Quick add — always visible */}
+      {/* Quick add — always visible */}
+      <div className="flex items-center gap-3 mt-2 pt-2 border-t border-border/50">
+        {focus && !allDone && (
+          <Link
+            href={`/projects/${focus.id}`}
+            className="text-xs text-primary hover:underline flex-shrink-0 hidden sm:block"
+          >
+            → {focus.name}
+          </Link>
+        )}
         <QuickAddCommitment
           activeProjects={activeProjects}
           focusProjectId={focus?.id || null}
           onAdded={() => mutateCommitments()}
         />
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -298,7 +306,6 @@ function QuickAddCommitment({
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-select focus project on mount
   useEffect(() => {
     if (!projectId && focusProjectId) {
       setProjectId(focusProjectId);
@@ -316,7 +323,6 @@ function QuickAddCommitment({
       });
       setCommitment("");
       onAdded();
-      toast.success(locale === "zh" ? "承诺已添加" : "Commitment added");
     } finally {
       setSubmitting(false);
     }
@@ -325,9 +331,9 @@ function QuickAddCommitment({
   if (activeProjects.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 pt-1">
+    <div className="flex items-center gap-2 flex-1">
       <Select value={projectId} onValueChange={setProjectId}>
-        <SelectTrigger className="w-32 h-8 text-xs">
+        <SelectTrigger className="w-28 h-8 text-xs">
           <SelectValue
             placeholder={locale === "zh" ? "项目" : "Project"}
           />
@@ -344,7 +350,9 @@ function QuickAddCommitment({
         ref={inputRef}
         className="h-8 text-sm flex-1"
         placeholder={
-          locale === "zh" ? "今天要完成什么？回车添加" : "What will you do? Enter to add"
+          locale === "zh"
+            ? "今天要完成什么？回车添加"
+            : "What will you do? Enter to add"
         }
         value={commitment}
         onChange={(e) => setCommitment(e.target.value)}
@@ -358,37 +366,51 @@ function QuickAddCommitment({
         onClick={handleSubmit}
         disabled={!projectId || !commitment.trim() || submitting}
       >
-        {locale === "zh" ? "添加" : "Add"}
+        +
       </Button>
     </div>
   );
 }
 
-function _buildSummary(
+function _getSubtitle(
   locale: string,
+  mode: "morning" | "afternoon" | "evening",
   done: number,
   total: number,
   overdue: number,
   focus: FocusProject | null
 ): string {
   if (locale === "zh") {
-    const parts: string[] = [];
-    if (overdue > 0) parts.push(`${overdue} 个拖延承诺需要处理`);
-    if (total > 0 && done < total)
-      parts.push(`今日还剩 ${total - done} 个承诺`);
-    if (total > 0 && done === total) parts.push("今日承诺已全部完成！");
-    if (total === 0 && overdue === 0) {
-      parts.push("还没设定今日承诺 — 设定一个开始行动");
+    if (total > 0 && done === total && overdue === 0) return "今天做到了。";
+    if (overdue > 0 && total > 0 && done < total)
+      return `${overdue} 个拖延 + ${total - done} 个今天的还没做。`;
+    if (overdue > 0) return `你还欠着 ${overdue} 个承诺。`;
+    if (total > 0 && done < total) {
+      if (mode === "evening") return `还剩 ${total - done} 个。今天交代清楚。`;
+      if (mode === "afternoon") return `还剩 ${total - done} 个。下午冲一下。`;
+      return `今天 ${total} 个承诺，开始吧。`;
     }
-    return parts.join("，");
-  } else {
-    const parts: string[] = [];
-    if (overdue > 0) parts.push(`${overdue} overdue commitments`);
-    if (total > 0 && done < total) parts.push(`${total - done} remaining today`);
-    if (total > 0 && done === total) parts.push("All commitments done today!");
-    if (total === 0 && overdue === 0) {
-      parts.push("No commitments yet — add one to start");
-    }
-    return parts.join(". ");
+    if (mode === "morning") return "今天打算做什么？设定承诺开始行动。";
+    if (mode === "afternoon")
+      return focus
+        ? `今天还没开始。要不先做「${focus.name}」？`
+        : "今天还没设定承诺。";
+    return "今天什么都没做。明天会更好吗？";
   }
+  // English
+  if (total > 0 && done === total && overdue === 0) return "You delivered today.";
+  if (overdue > 0 && total > 0 && done < total)
+    return `${overdue} overdue + ${total - done} remaining today.`;
+  if (overdue > 0) return `You owe ${overdue} commitments.`;
+  if (total > 0 && done < total) {
+    if (mode === "evening") return `${total - done} left. Finish before you leave.`;
+    if (mode === "afternoon") return `${total - done} left. Push through.`;
+    return `${total} commitments today. Let's go.`;
+  }
+  if (mode === "morning") return "What will you do today? Set a commitment.";
+  if (mode === "afternoon")
+    return focus
+      ? `Nothing started. How about "${focus.name}"?`
+      : "No commitments set today.";
+  return "Nothing done today. Will tomorrow be different?";
 }

@@ -1,5 +1,12 @@
 import { db } from "@/lib/db";
-import { projects, stageTransitions, validationItems, notes, metrics, settings } from "@/lib/db/schema";
+import {
+  projects,
+  stageTransitions,
+  validationItems,
+  dailyCommitments,
+  gitScans,
+  settings,
+} from "@/lib/db/schema";
 import { eq, and, gte } from "drizzle-orm";
 
 function getSetting(key: string): unknown {
@@ -7,11 +14,20 @@ function getSetting(key: string): unknown {
   return row ? JSON.parse(row.value) : null;
 }
 
+/**
+ * Honest momentum formula.
+ *
+ * Only real work counts:
+ * 1. Git activity (commits) — the most honest signal
+ * 2. Validation completion rate — proximity to real milestones
+ * 3. Commitment fulfillment — did you do what you said you'd do?
+ * 4. Stage advancement — actual forward movement
+ * 5. Time decay — inactivity costs you
+ *
+ * Writing notes does NOT count. Using the tool is NOT working on the project.
+ */
 export function calculateMomentum(projectId: string): number {
   const decayRate = (getSetting("momentum.decayRatePerDay") as number) ?? 5;
-  const updateBoost = (getSetting("momentum.updateBoost") as number) ?? 10;
-  const stageAdvanceBoost =
-    (getSetting("momentum.stageAdvanceBoost") as number) ?? 25;
 
   const project = db
     .select()
@@ -24,7 +40,63 @@ export function calculateMomentum(projectId: string): number {
   const now = Date.now();
   const daysSinceUpdate = (now - project.updatedAt) / (1000 * 60 * 60 * 24);
 
-  // Count stage advances in last 30 days
+  // === 1. Git activity (0-35 pts) ===
+  // The most honest signal — did you write code?
+  const recentScan = db
+    .select()
+    .from(gitScans)
+    .where(eq(gitScans.projectId, projectId))
+    .all()
+    .sort((a, b) => b.scannedAt - a.scannedAt)[0];
+
+  let gitScore = 0;
+  if (recentScan) {
+    const commits = recentScan.commits7d || 0;
+    if (commits >= 10) gitScore = 35;
+    else if (commits >= 5) gitScore = 25;
+    else if (commits >= 2) gitScore = 15;
+    else if (commits >= 1) gitScore = 8;
+  }
+
+  // === 2. Validation completion (0-25 pts) ===
+  // How close are you to real milestones?
+  const allValidation = db
+    .select()
+    .from(validationItems)
+    .where(eq(validationItems.projectId, projectId))
+    .all();
+
+  let validationScore = 0;
+  if (allValidation.length > 0) {
+    const completedCount = allValidation.filter((v) => v.isCompleted).length;
+    const ratio = completedCount / allValidation.length;
+    validationScore = Math.round(ratio * 25);
+  }
+
+  // === 3. Commitment fulfillment (0-20 pts) ===
+  // Did you do what you said you'd do in the last 7 days?
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const sevenDaysAgoStr = new Date(sevenDaysAgo).toISOString().slice(0, 10);
+  const recentCommitments = db
+    .select()
+    .from(dailyCommitments)
+    .where(
+      and(
+        eq(dailyCommitments.projectId, projectId),
+        gte(dailyCommitments.date, sevenDaysAgoStr)
+      )
+    )
+    .all();
+
+  let commitmentScore = 0;
+  if (recentCommitments.length > 0) {
+    const fulfilled = recentCommitments.filter((c) => c.isCompleted).length;
+    const ratio = fulfilled / recentCommitments.length;
+    commitmentScore = Math.round(ratio * 20);
+  }
+
+  // === 4. Stage advancement (0-20 pts) ===
+  // Did you actually move forward?
   const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
   const recentTransitions = db
     .select()
@@ -37,81 +109,14 @@ export function calculateMomentum(projectId: string): number {
     )
     .all();
 
-  // Count distinct days with activity in last 7 days
-  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-  const activeDays = new Set<string>();
+  const stageScore = Math.min(recentTransitions.length * 20, 20);
 
-  const recentNotes = db
-    .select()
-    .from(notes)
-    .where(
-      and(
-        eq(notes.projectId, projectId),
-        gte(notes.createdAt, sevenDaysAgo)
-      )
-    )
-    .all();
-  for (const n of recentNotes) {
-    activeDays.add(new Date(n.createdAt).toISOString().slice(0, 10));
-  }
+  // === Time decay ===
+  // Inactivity costs you. No activity for 10+ days = near zero.
+  const decay = daysSinceUpdate * decayRate;
 
-  const recentMetrics = db
-    .select()
-    .from(metrics)
-    .where(
-      and(
-        eq(metrics.projectId, projectId),
-        gte(metrics.recordedAt, sevenDaysAgo)
-      )
-    )
-    .all();
-  for (const m of recentMetrics) {
-    activeDays.add(new Date(m.recordedAt).toISOString().slice(0, 10));
-  }
-
-  const recentValidations = db
-    .select()
-    .from(validationItems)
-    .where(
-      and(
-        eq(validationItems.projectId, projectId),
-        gte(validationItems.completedAt, sevenDaysAgo)
-      )
-    )
-    .all();
-  for (const v of recentValidations) {
-    if (v.completedAt) {
-      activeDays.add(new Date(v.completedAt).toISOString().slice(0, 10));
-    }
-  }
-
-  if (project.updatedAt >= sevenDaysAgo) {
-    activeDays.add(new Date(project.updatedAt).toISOString().slice(0, 10));
-  }
-
-  // Validation progress bonus (0-15 pts)
-  const allValidation = db
-    .select()
-    .from(validationItems)
-    .where(eq(validationItems.projectId, projectId))
-    .all();
-  let validationBonus = 0;
-  if (allValidation.length > 0) {
-    const completedCount = allValidation.filter((v) => v.isCompleted).length;
-    validationBonus = Math.round((completedCount / allValidation.length) * 15);
-  }
-
-  // Active days bonus: each active day in last 7 gives updateBoost points (capped at 3 days)
-  const activityBonus = Math.min(activeDays.size, 3) * updateBoost;
-
-  const score =
-    100 -
-    daysSinceUpdate * decayRate +
-    recentTransitions.length * stageAdvanceBoost +
-    activityBonus +
-    validationBonus;
-
-  return Math.max(0, Math.min(100, Math.round(score)));
+  const rawScore = gitScore + validationScore + commitmentScore + stageScore - decay;
+  return Math.max(0, Math.min(100, Math.round(rawScore)));
 }
 
 export function updateProjectMomentum(projectId: string): number {
