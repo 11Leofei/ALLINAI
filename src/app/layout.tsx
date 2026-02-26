@@ -4,7 +4,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Providers } from "@/components/providers";
 import { CommandPalette } from "@/components/layout/command-palette";
-import { DailyCommitmentBar } from "@/components/commitment/daily-commitment";
+import { SmartCommitmentBar } from "@/components/commitment/smart-bar";
 import { QuickActionFAB } from "@/components/layout/quick-action-fab";
 import { Toaster } from "@/components/ui/sonner";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -46,7 +46,7 @@ export default function RootLayout({
           <div className="flex h-screen overflow-hidden">
             <Sidebar />
             <main className="flex-1 overflow-auto bg-background pt-14 md:pt-0">
-              <DailyCommitmentBar />
+              <SmartCommitmentBar />
               <ErrorBoundary>{children}</ErrorBoundary>
             </main>
           </div>

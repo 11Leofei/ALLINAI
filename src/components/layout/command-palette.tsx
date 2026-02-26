@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useProjects } from "@/lib/hooks/use-projects";
 import { useLocale } from "@/lib/locale-context";
 import { STAGE_COLORS, type ProjectStage } from "@/types";
+import { toast } from "sonner";
 
 interface CommandItem {
   id: string;
@@ -15,15 +16,58 @@ interface CommandItem {
   action: () => void;
 }
 
+type InlineAction = null | { mode: "commitment" | "note"; projectId: string; projectName: string };
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [inlineAction, setInlineAction] = useState<InlineAction>(null);
+  const [actionText, setActionText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
   const { projects } = useProjects();
   const { t, stageLabel, locale } = useLocale();
   const inputRef = useRef<HTMLInputElement>(null);
+  const actionInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  const activeProjects = projects.filter((p) => p.stage !== "archived");
+
+  // Handle inline action submit
+  const handleActionSubmit = async () => {
+    if (!inlineAction || !actionText.trim()) return;
+    setSubmitting(true);
+    try {
+      if (inlineAction.mode === "commitment") {
+        await fetch("/api/commitments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId: inlineAction.projectId, commitment: actionText.trim() }),
+        });
+        toast.success(locale === "zh" ? `承诺已添加到「${inlineAction.projectName}」` : `Commitment added to "${inlineAction.projectName}"`);
+      } else {
+        await fetch(`/api/projects/${inlineAction.projectId}/notes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: actionText.trim() }),
+        });
+        toast.success(locale === "zh" ? `笔记已添加到「${inlineAction.projectName}」` : `Note added to "${inlineAction.projectName}"`);
+      }
+      setActionText("");
+      setInlineAction(null);
+      setOpen(false);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Focus action input when inline action opens
+  useEffect(() => {
+    if (inlineAction) {
+      setTimeout(() => actionInputRef.current?.focus(), 50);
+    }
+  }, [inlineAction]);
 
   // Build command items
   const items: CommandItem[] = [];
@@ -92,6 +136,30 @@ export function CommandPalette() {
     });
   }
 
+  // Quick action: add commitment/note to each active project
+  for (const project of activeProjects.slice(0, 5)) {
+    items.push({
+      id: `quick-commit-${project.id}`,
+      label: `${locale === "zh" ? "添加承诺 →" : "Add commitment →"} ${project.name}`,
+      category: locale === "zh" ? "快捷操作" : "Quick Actions",
+      icon: checkIcon,
+      action: () => {
+        setInlineAction({ mode: "commitment", projectId: project.id, projectName: project.name });
+        setQuery("");
+      },
+    });
+    items.push({
+      id: `quick-note-${project.id}`,
+      label: `${locale === "zh" ? "添加笔记 →" : "Add note →"} ${project.name}`,
+      category: locale === "zh" ? "快捷操作" : "Quick Actions",
+      icon: penIcon,
+      action: () => {
+        setInlineAction({ mode: "note", projectId: project.id, projectName: project.name });
+        setQuery("");
+      },
+    });
+  }
+
   // Projects (filtered by query)
   const q = query.toLowerCase();
   const matchedProjects = projects
@@ -142,16 +210,29 @@ export function CommandPalette() {
   // Keyboard shortcut to open
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Cmd+K: open palette
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setOpen((prev) => !prev);
         setQuery("");
+        setInlineAction(null);
+        setSelectedIndex(0);
+      }
+      // 'c' key: open palette with commitment filter (not in input)
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "c") {
+        e.preventDefault();
+        setOpen(true);
+        setQuery(locale === "zh" ? "承诺" : "commitment");
+        setInlineAction(null);
         setSelectedIndex(0);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [locale]);
 
   // Focus input on open
   useEffect(() => {
@@ -203,102 +284,149 @@ export function CommandPalette() {
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={() => setOpen(false)}
+        onClick={() => { setOpen(false); setInlineAction(null); }}
       />
       {/* Dialog */}
       <div className="absolute left-1/2 top-[20%] -translate-x-1/2 w-full max-w-lg">
         <div className="bg-card border rounded-xl shadow-2xl overflow-hidden">
-          {/* Search input */}
-          <div className="flex items-center gap-3 px-4 border-b">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="text-muted-foreground flex-shrink-0"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-            <input
-              ref={inputRef}
-              className="flex-1 py-3.5 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
-              placeholder={t("command.placeholder")}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-            />
-            <kbd className="hidden sm:inline-flex text-xs bg-muted px-1.5 py-0.5 rounded font-mono text-muted-foreground">
-              ESC
-            </kbd>
-          </div>
+          {/* Inline action mode */}
+          {inlineAction ? (
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium">
+                  {inlineAction.mode === "commitment"
+                    ? locale === "zh" ? `添加承诺 → ${inlineAction.projectName}` : `Add commitment → ${inlineAction.projectName}`
+                    : locale === "zh" ? `添加笔记 → ${inlineAction.projectName}` : `Add note → ${inlineAction.projectName}`}
+                </p>
+                <button
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => { setInlineAction(null); setTimeout(() => inputRef.current?.focus(), 50); }}
+                >
+                  {locale === "zh" ? "返回" : "Back"}
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={actionInputRef}
+                  className="flex-1 h-10 px-3 rounded-lg border bg-transparent text-sm outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground"
+                  placeholder={
+                    inlineAction.mode === "commitment"
+                      ? locale === "zh" ? "今天要完成什么？" : "What will you accomplish?"
+                      : locale === "zh" ? "记录想法..." : "Write a note..."
+                  }
+                  value={actionText}
+                  onChange={(e) => setActionText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleActionSubmit();
+                    if (e.key === "Escape") { setInlineAction(null); setTimeout(() => inputRef.current?.focus(), 50); }
+                  }}
+                />
+                <button
+                  className="h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+                  onClick={handleActionSubmit}
+                  disabled={!actionText.trim() || submitting}
+                >
+                  {submitting
+                    ? locale === "zh" ? "提交中..." : "..."
+                    : locale === "zh" ? "提交" : "Submit"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Search input */}
+              <div className="flex items-center gap-3 px-4 border-b">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-muted-foreground flex-shrink-0"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+                <input
+                  ref={inputRef}
+                  className="flex-1 py-3.5 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+                  placeholder={t("command.placeholder")}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                />
+                <kbd className="hidden sm:inline-flex text-xs bg-muted px-1.5 py-0.5 rounded font-mono text-muted-foreground">
+                  ESC
+                </kbd>
+              </div>
 
-          {/* Results */}
-          <div ref={listRef} className="max-h-80 overflow-auto p-2">
-            {flatFiltered.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                {t("command.noResults")}
-              </p>
-            ) : (
-              Object.entries(grouped).map(([category, items]) => (
-                <div key={category} className="mb-2">
-                  <p className="text-xs font-medium text-muted-foreground px-2 py-1.5">
-                    {category}
+              {/* Results */}
+              <div ref={listRef} className="max-h-80 overflow-auto p-2">
+                {flatFiltered.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                    {t("command.noResults")}
                   </p>
-                  {items.map((item) => {
-                    const idx = flatIndex++;
-                    return (
-                      <button
-                        key={item.id}
-                        data-index={idx}
-                        className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                          idx === selectedIndex
-                            ? "bg-accent text-accent-foreground"
-                            : "hover:bg-accent/50"
-                        }`}
-                        onClick={item.action}
-                        onMouseEnter={() => setSelectedIndex(idx)}
-                      >
-                        <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-muted-foreground">
-                          {item.icon}
-                        </span>
-                        <span className="flex-1 truncate">{item.label}</span>
-                        {item.description && (
-                          <span className="text-xs text-muted-foreground">
-                            {item.description}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))
-            )}
-          </div>
+                ) : (
+                  Object.entries(grouped).map(([category, items]) => (
+                    <div key={category} className="mb-2">
+                      <p className="text-xs font-medium text-muted-foreground px-2 py-1.5">
+                        {category}
+                      </p>
+                      {items.map((item) => {
+                        const idx = flatIndex++;
+                        return (
+                          <button
+                            key={item.id}
+                            data-index={idx}
+                            className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-left text-sm transition-colors ${
+                              idx === selectedIndex
+                                ? "bg-accent text-accent-foreground"
+                                : "hover:bg-accent/50"
+                            }`}
+                            onClick={item.action}
+                            onMouseEnter={() => setSelectedIndex(idx)}
+                          >
+                            <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-muted-foreground">
+                              {item.icon}
+                            </span>
+                            <span className="flex-1 truncate">{item.label}</span>
+                            {item.description && (
+                              <span className="text-xs text-muted-foreground">
+                                {item.description}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))
+                )}
+              </div>
 
-          {/* Footer hints */}
-          <div className="border-t px-4 py-2 flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
-            <span className="flex items-center gap-1">
-              <kbd className="bg-muted px-1 py-0.5 rounded font-mono">↑↓</kbd>
-              {locale === "zh" ? "导航" : "Navigate"}
-            </span>
-            <span className="flex items-center gap-1">
-              <kbd className="bg-muted px-1 py-0.5 rounded font-mono">↵</kbd>
-              {locale === "zh" ? "选择" : "Select"}
-            </span>
-            <span className="flex items-center gap-1">
-              <kbd className="bg-muted px-1 py-0.5 rounded font-mono">esc</kbd>
-              {locale === "zh" ? "关闭" : "Close"}
-            </span>
-            <span className="ml-auto text-muted-foreground/60">
-              {locale === "zh" ? "快捷键: G/P/D/R/S 导航 · ? 帮助" : "Keys: G/P/D/R/S navigate · ? help"}
-            </span>
-          </div>
+              {/* Footer hints */}
+              <div className="border-t px-4 py-2 flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                <span className="flex items-center gap-1">
+                  <kbd className="bg-muted px-1 py-0.5 rounded font-mono">↑↓</kbd>
+                  {locale === "zh" ? "导航" : "Navigate"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <kbd className="bg-muted px-1 py-0.5 rounded font-mono">↵</kbd>
+                  {locale === "zh" ? "选择" : "Select"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <kbd className="bg-muted px-1 py-0.5 rounded font-mono">esc</kbd>
+                  {locale === "zh" ? "关闭" : "Close"}
+                </span>
+                <span className="ml-auto text-muted-foreground/60">
+                  {locale === "zh" ? "C 添加承诺 · G/P/D/R/S 导航" : "C add commitment · G/P/D/R/S navigate"}
+                </span>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -358,5 +486,15 @@ const bellIcon = (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
     <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+  </svg>
+);
+const checkIcon = (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 6 9 17l-5-5" />
+  </svg>
+);
+const penIcon = (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 20h9" /><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
   </svg>
 );

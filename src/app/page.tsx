@@ -8,12 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreateProjectDialog } from "@/components/project/create-dialog";
 import { SearchFilterBar } from "@/components/search/search-filter-bar";
-import { CommitmentStats } from "@/components/commitment/daily-commitment";
-import { FocusCard } from "@/components/dashboard/focus-card";
-import { AccountabilityCard } from "@/components/dashboard/accountability-card";
 import { DiscoverReposDialog } from "@/components/ai/discover-repos-dialog";
-import { TodayBrief } from "@/components/dashboard/today-brief";
+import { MissionControl } from "@/components/dashboard/mission-control";
+import { AccountabilityCard } from "@/components/dashboard/accountability-card";
 import { OnboardingCard } from "@/components/dashboard/onboarding";
+import { ProjectQuickActions } from "@/components/dashboard/project-quick-actions";
 import Link from "next/link";
 import { useLocale } from "@/lib/locale-context";
 import {
@@ -41,7 +40,11 @@ const PIE_COLORS: Record<string, string> = {
 
 function getStaleProjects(projects: Project[]): Project[] {
   const thresholds: Record<string, number> = {
-    idea: 3, development: 5, launch: 7, validation: 5, data_collection: 7,
+    idea: 3,
+    development: 5,
+    launch: 7,
+    validation: 5,
+    data_collection: 7,
   };
   return projects.filter((p) => {
     if (p.stage === "archived") return false;
@@ -51,9 +54,26 @@ function getStaleProjects(projects: Project[]): Project[] {
   });
 }
 
+// Stage-aware next action hints
+function getNextActionHint(
+  project: Project,
+  locale: string
+): string | null {
+  const hints: Record<string, { zh: string; en: string }> = {
+    idea: { zh: "定义验证标准，开始行动", en: "Define validation criteria" },
+    development: { zh: "推进核心功能，别拖", en: "Ship the core feature" },
+    launch: { zh: "发布出去，收集反馈", en: "Launch & gather feedback" },
+    validation: { zh: "验证清单还没做完", en: "Complete validation items" },
+    data_collection: { zh: "分析数据，做决策", en: "Analyze data & decide" },
+  };
+  const hint = hints[project.stage];
+  if (!hint) return null;
+  return locale === "zh" ? hint.zh : hint.en;
+}
+
 export default function DashboardPage() {
   const { projects, isLoading, mutate } = useProjects();
-  const { t, stageLabel } = useLocale();
+  const { t, stageLabel, locale } = useLocale();
   const [showCreate, setShowCreate] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -91,30 +111,46 @@ export default function DashboardPage() {
   const activeProjects = projects.filter((p) => p.stage !== "archived");
   const globalMomentum =
     activeProjects.length > 0
-      ? Math.round(activeProjects.reduce((sum, p) => sum + p.momentum, 0) / activeProjects.length)
+      ? Math.round(
+          activeProjects.reduce((sum, p) => sum + p.momentum, 0) /
+            activeProjects.length
+        )
       : 0;
 
   const staleProjects = getStaleProjects(projects);
   const displayProjects = filteredProjects;
-  const recentProjects = [...displayProjects].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5);
-  const topMomentumProjects = [...activeProjects].sort((a, b) => b.momentum - a.momentum).slice(0, 5);
+  const recentProjects = [...displayProjects]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 6);
+  const topMomentumProjects = [...activeProjects]
+    .sort((a, b) => b.momentum - a.momentum)
+    .slice(0, 5);
 
   const stageCounts: Record<string, number> = {};
   for (const stage of STAGE_ORDER) {
     stageCounts[stage] = projects.filter((p) => p.stage === stage).length;
   }
 
-  // Pie chart data
-  const pieData = STAGE_ORDER.filter((s) => s !== "archived" && stageCounts[s] > 0).map((stage) => ({
+  const pieData = STAGE_ORDER.filter(
+    (s) => s !== "archived" && stageCounts[s] > 0
+  ).map((stage) => ({
     name: stageLabel(stage),
     value: stageCounts[stage],
     stage,
   }));
 
-  const getMomentumStatus = (momentum: number): { label: string; color: string } => {
-    if (momentum >= 80) return { label: t("dashboard.momentumStrong"), color: "text-green-600" };
-    if (momentum >= 60) return { label: t("dashboard.momentumGood"), color: "text-blue-600" };
-    if (momentum >= 40) return { label: t("dashboard.momentumNeedsPush"), color: "text-yellow-600" };
+  const getMomentumStatus = (
+    momentum: number
+  ): { label: string; color: string } => {
+    if (momentum >= 80)
+      return { label: t("dashboard.momentumStrong"), color: "text-green-600" };
+    if (momentum >= 60)
+      return { label: t("dashboard.momentumGood"), color: "text-blue-600" };
+    if (momentum >= 40)
+      return {
+        label: t("dashboard.momentumNeedsPush"),
+        color: "text-yellow-600",
+      };
     return { label: t("dashboard.momentumLow"), color: "text-red-500" };
   };
 
@@ -137,7 +173,9 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{t("dashboard.title")}</h1>
-          <p className="text-sm text-muted-foreground">{t("dashboard.subtitle")}</p>
+          <p className="text-sm text-muted-foreground">
+            {t("dashboard.subtitle")}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <DiscoverReposDialog
@@ -158,12 +196,115 @@ export default function DashboardPage() {
       {projects.length === 0 && (
         <OnboardingCard
           onCreateProject={() => setShowCreate(true)}
-          onDiscover={() => {/* handled by DiscoverReposDialog */}}
+          onDiscover={() => {}}
         />
       )}
 
-      {/* Today Brief — only when there are projects */}
-      {projects.length > 0 && <TodayBrief />}
+      {/* === MISSION CONTROL — the action center === */}
+      {projects.length > 0 && <MissionControl />}
+
+      {/* Compact stats row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Global Momentum */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium text-muted-foreground">
+              {t("dashboard.globalMomentum")}
+            </p>
+            <span className={`text-xs font-medium ${momentumStatus.color}`}>
+              {momentumStatus.label}
+            </span>
+          </div>
+          <div className="flex items-end gap-2">
+            <span className="text-3xl font-bold">{globalMomentum}</span>
+            <span className="text-sm text-muted-foreground mb-0.5">/100</span>
+          </div>
+          <Progress value={globalMomentum} className="h-1.5 mt-2" />
+        </Card>
+
+        {/* Total projects */}
+        <Card className="p-4">
+          <p className="text-xs font-medium text-muted-foreground mb-1">
+            {t("dashboard.totalProjects")}
+          </p>
+          <p className="text-3xl font-bold">{projects.length}</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {t("dashboard.activeCount", {
+              active: activeProjects.length,
+              archived: projects.length - activeProjects.length,
+            })}
+          </p>
+        </Card>
+
+        {/* Needs Attention */}
+        <Card className="p-4">
+          <p className="text-xs font-medium text-muted-foreground mb-1">
+            {t("dashboard.needsAttention")}
+          </p>
+          <p
+            className={`text-3xl font-bold ${
+              staleProjects.length > 0 ? "text-orange-500" : "text-green-600"
+            }`}
+          >
+            {staleProjects.length}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {staleProjects.length === 0
+              ? t("dashboard.allGood")
+              : t("dashboard.projectsNeedAction")}
+          </p>
+        </Card>
+
+        {/* Stage mini chart */}
+        <Card className="p-4">
+          <p className="text-xs font-medium text-muted-foreground mb-2">
+            {t("dashboard.stageDistribution")}
+          </p>
+          {pieData.length > 0 ? (
+            <div className="flex items-center gap-2">
+              <ResponsiveContainer width={60} height={60}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={16}
+                    outerRadius={28}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {pieData.map((entry) => (
+                      <Cell
+                        key={entry.stage}
+                        fill={PIE_COLORS[entry.stage]}
+                      />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-0.5 flex-1 min-w-0">
+                {pieData.slice(0, 3).map((entry) => (
+                  <div key={entry.stage} className="flex items-center gap-1">
+                    <div
+                      className="h-2 w-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: PIE_COLORS[entry.stage] }}
+                    />
+                    <span className="text-xs truncate">{entry.name}</span>
+                    <span className="text-xs font-medium ml-auto">
+                      {entry.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {t("dashboard.noProjects")}
+            </p>
+          )}
+        </Card>
+      </div>
 
       {/* Search & Filter */}
       <SearchFilterBar
@@ -175,167 +316,130 @@ export default function DashboardPage() {
         onPriorityFilterChange={setPriorityFilter}
       />
 
-      {/* Stats row */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Global Momentum */}
-        <Card className="p-4 col-span-2">
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="text-sm font-medium text-muted-foreground">{t("dashboard.globalMomentum")}</h2>
-            <span className={`text-sm font-medium ${momentumStatus.color}`}>{momentumStatus.label}</span>
-          </div>
-          <div className="flex items-end gap-3 mb-2">
-            <span className="text-4xl font-bold">{globalMomentum}</span>
-            <span className="text-lg text-muted-foreground mb-1">/100</span>
-          </div>
-          <Progress value={globalMomentum} className="h-2.5" />
-          <p className="text-xs text-muted-foreground mt-2">
-            {t("dashboard.activeProjects", { count: activeProjects.length })}
-          </p>
-        </Card>
-
-        {/* Quick stats */}
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground mb-1">
-            {t("dashboard.totalProjects")}
-          </p>
-          <p className="text-3xl font-bold">{projects.length}</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {t("dashboard.activeCount", { active: activeProjects.length, archived: projects.length - activeProjects.length })}
-          </p>
-        </Card>
-
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground mb-1">
-            {t("dashboard.needsAttention")}
-          </p>
-          <p className={`text-3xl font-bold ${staleProjects.length > 0 ? "text-orange-500" : "text-green-600"}`}>
-            {staleProjects.length}
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {staleProjects.length === 0
-              ? t("dashboard.allGood")
-              : t("dashboard.projectsNeedAction")}
-          </p>
-        </Card>
-      </div>
-
+      {/* Project lists — with inline quick actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Stage Distribution Pie Chart */}
-        <Card className="p-6">
-          <h2 className="font-semibold mb-4">{t("dashboard.stageDistribution")}</h2>
-          {pieData.length > 0 ? (
-            <div className="flex items-center gap-4">
-              <ResponsiveContainer width="50%" height={160}>
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={35} outerRadius={65} dataKey="value" stroke="none">
-                    {pieData.map((entry) => (
-                      <Cell key={entry.stage} fill={PIE_COLORS[entry.stage]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-2 flex-1">
-                {pieData.map((entry) => (
-                  <div key={entry.stage} className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: PIE_COLORS[entry.stage] }} />
-                    <span className="text-sm flex-1">{entry.name}</span>
-                    <span className="text-sm font-medium">{entry.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {STAGE_ORDER.filter((s) => s !== "archived").map((stage) => {
-                const count = stageCounts[stage] || 0;
-                const maxCount = Math.max(...Object.values(stageCounts), 1);
-                return (
-                  <div key={stage} className="flex items-center gap-3">
-                    <div className={`h-3 w-3 rounded-full ${STAGE_COLORS[stage as ProjectStage]}`} />
-                    <span className="text-sm flex-1">{stageLabel(stage)}</span>
-                    <div className="w-24 bg-muted rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full transition-all ${STAGE_COLORS[stage as ProjectStage]}`}
-                        style={{ width: `${(count / maxCount) * 100}%` }}
-                      />
-                    </div>
-                    <span className="font-medium text-sm w-6 text-right">{count}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-
-        {/* Needs Attention */}
-        <Card className="p-6">
-          <h2 className="font-semibold mb-4">
+        {/* Needs Attention — actionable */}
+        <Card className="p-5">
+          <h2 className="font-semibold mb-3 flex items-center gap-2">
             {t("dashboard.needsAttention")}
             {staleProjects.length > 0 && (
-              <Badge variant="destructive" className="ml-2">{staleProjects.length}</Badge>
+              <Badge variant="destructive">{staleProjects.length}</Badge>
             )}
           </h2>
           {staleProjects.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-2 text-green-500">
+            <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="mb-1.5 text-green-500"
+              >
                 <path d="M20 6 9 17l-5-5" />
               </svg>
               <p className="text-sm">{t("dashboard.allOnTrack")}</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {staleProjects.map((p) => {
-                const days = Math.floor((Date.now() - p.stageEnteredAt) / (1000 * 60 * 60 * 24));
+                const days = Math.floor(
+                  (Date.now() - p.stageEnteredAt) / (1000 * 60 * 60 * 24)
+                );
+                const hint = getNextActionHint(p, locale);
                 return (
-                  <Link key={p.id} href={`/projects/${p.id}`}
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors"
+                  <Link
+                    key={p.id}
+                    href={`/projects/${p.id}`}
+                    className="group flex items-center gap-2.5 p-2 rounded-lg hover:bg-accent transition-colors"
                   >
-                    <span className="text-orange-500">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <span className="text-orange-500 flex-shrink-0">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
-                        <path d="M12 9v4" /><path d="M12 17h.01" />
+                        <path d="M12 9v4" />
+                        <path d="M12 17h.01" />
                       </svg>
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{p.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {t("dashboard.daysInStage", { days, stage: stageLabel(p.stage) })}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {t("dashboard.daysInStage", {
+                            days,
+                            stage: stageLabel(p.stage),
+                          })}
+                        </p>
+                        {hint && (
+                          <span className="text-xs text-primary">
+                            → {hint}
+                          </span>
+                        )}
+                      </div>
                     </div>
+                    <ProjectQuickActions
+                      projectId={p.id}
+                      projectName={p.name}
+                    />
                   </Link>
                 );
               })}
             </div>
           )}
         </Card>
-      </div>
 
-      {/* Focus + Accountability + Commitments */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <FocusCard />
-        <AccountabilityCard />
-        <CommitmentStats />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Momentum Ranking */}
-        <Card className="p-6">
-          <h2 className="font-semibold mb-4">{t("dashboard.topMomentum")}</h2>
+        {/* Momentum Ranking — actionable */}
+        <Card className="p-5">
+          <h2 className="font-semibold mb-3">{t("dashboard.topMomentum")}</h2>
           {topMomentumProjects.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("dashboard.noProjects")}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("dashboard.noProjects")}
+            </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-1">
               {topMomentumProjects.map((p, idx) => (
-                <Link key={p.id} href={`/projects/${p.id}`}
-                  className="flex items-center gap-3 hover:bg-accent p-1.5 rounded-lg transition-colors"
+                <Link
+                  key={p.id}
+                  href={`/projects/${p.id}`}
+                  className="group flex items-center gap-2.5 hover:bg-accent p-2 rounded-lg transition-colors"
                 >
-                  <span className={`w-5 text-center text-xs font-bold ${idx === 0 ? "text-yellow-500" : idx === 1 ? "text-gray-400" : idx === 2 ? "text-orange-400" : "text-muted-foreground"}`}>
+                  <span
+                    className={`w-5 text-center text-xs font-bold ${
+                      idx === 0
+                        ? "text-yellow-500"
+                        : idx === 1
+                        ? "text-gray-400"
+                        : idx === 2
+                        ? "text-orange-400"
+                        : "text-muted-foreground"
+                    }`}
+                  >
                     {idx + 1}
                   </span>
                   <span className="text-sm flex-1 truncate">{p.name}</span>
-                  <Progress value={p.momentum} className="h-1.5 w-20" />
-                  <span className={`text-xs font-medium w-8 text-right ${getMomentumStatus(p.momentum).color}`}>
+                  <ProjectQuickActions
+                    projectId={p.id}
+                    projectName={p.name}
+                  />
+                  <Progress value={p.momentum} className="h-1.5 w-16" />
+                  <span
+                    className={`text-xs font-medium w-7 text-right ${
+                      getMomentumStatus(p.momentum).color
+                    }`}
+                  >
                     {Math.round(p.momentum)}
                   </span>
                 </Link>
@@ -343,34 +447,68 @@ export default function DashboardPage() {
             </div>
           )}
         </Card>
+      </div>
 
-        {/* Recent Activity */}
-        <Card className="p-6">
-          <h2 className="font-semibold mb-4">{t("dashboard.recentActivity")}</h2>
+      {/* Recent Activity + Accountability */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Activity — 2 cols */}
+        <Card className="p-5 lg:col-span-2">
+          <h2 className="font-semibold mb-3">{t("dashboard.recentActivity")}</h2>
           {recentProjects.length === 0 ? (
-            <div className="flex flex-col items-center py-8">
-              <p className="text-sm text-muted-foreground">{t("dashboard.noProjects")}</p>
+            <div className="flex flex-col items-center py-6">
+              <p className="text-sm text-muted-foreground">
+                {t("dashboard.noProjects")}
+              </p>
               <CreateProjectDialog onCreated={() => mutate()}>
-                <Button variant="link" className="mt-2">{t("pipeline.createFirst")}</Button>
+                <Button variant="link" className="mt-2">
+                  {t("pipeline.createFirst")}
+                </Button>
               </CreateProjectDialog>
             </div>
           ) : (
-            <div className="space-y-2">
-              {recentProjects.map((p) => (
-                <Link key={p.id} href={`/projects/${p.id}`}
-                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors"
-                >
-                  <div className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${STAGE_COLORS[p.stage]}`} />
-                  <span className="text-sm font-medium flex-1 truncate">{p.name}</span>
-                  <Badge variant="outline" className="text-xs">{stageLabel(p.stage)}</Badge>
-                  <span className="text-xs text-muted-foreground flex-shrink-0">
-                    {timeAgo(p.updatedAt)}
-                  </span>
-                </Link>
-              ))}
+            <div className="space-y-1">
+              {recentProjects.map((p) => {
+                const hint = getNextActionHint(p, locale);
+                return (
+                  <Link
+                    key={p.id}
+                    href={`/projects/${p.id}`}
+                    className="group flex items-center gap-2.5 p-2 rounded-lg hover:bg-accent transition-colors"
+                  >
+                    <div
+                      className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${
+                        STAGE_COLORS[p.stage]
+                      }`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium truncate block">
+                        {p.name}
+                      </span>
+                      {hint && (
+                        <span className="text-xs text-muted-foreground">
+                          {hint}
+                        </span>
+                      )}
+                    </div>
+                    <ProjectQuickActions
+                      projectId={p.id}
+                      projectName={p.name}
+                    />
+                    <Badge variant="outline" className="text-xs flex-shrink-0">
+                      {stageLabel(p.stage)}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground flex-shrink-0">
+                      {timeAgo(p.updatedAt)}
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </Card>
+
+        {/* Accountability card — 1 col */}
+        <AccountabilityCard />
       </div>
     </div>
   );
