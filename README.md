@@ -1,36 +1,113 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ALLINAI
 
-## Getting Started
+项目孵化仪表盘 — 从想法到验证的全流程管理工具。
 
-First, run the development server:
+跟踪你的 side project 进度，用 AI 分析项目健康度，用承诺系统逼自己别摆烂。
+
+## 功能
+
+**项目管理**
+- 六阶段工作流：想法 → 开发 → 上线 → 验证 → 数据收集 → 归档
+- 看板拖拽、搜索过滤、优先级排序
+- 验证清单、指标图表、笔记、阶段转换历史
+
+**每日承诺**
+- 每天设定承诺，逾期自动结转
+- 连续打卡追踪、30 天热力图
+- Shame badge 机制 — 拖延了就得认
+
+**AI 分析**
+- 多模型支持：Claude / OpenAI / 自定义端点
+- 项目健康度评估、推荐下一步行动
+- 每日聚焦推荐：AI 告诉你今天该做哪个项目
+
+**自动化**
+- 本地 Git 仓库自动发现与扫描
+- 后台 Cron 定时扫描代码活跃度
+- 系统通知提醒
+
+**MCP 集成**
+- 完整的 Model Context Protocol server
+- 通过 AI 助手直接管理项目、添加笔记、查看摘要
+
+**报告**
+- 每日简报、周报、月报
+- Markdown 导出
+
+**国际化**
+- 中文 / English 双语支持
+
+## 技术栈
+
+| 层 | 技术 |
+|---|------|
+| 框架 | Next.js 16 + React 19 (Turbopack) |
+| 数据库 | SQLite + Drizzle ORM |
+| UI | shadcn/ui + Tailwind CSS 4 + Lucide Icons |
+| 数据获取 | SWR |
+| 图表 | Recharts |
+| 看板 | @hello-pangea/dnd |
+| AI | Anthropic SDK + OpenAI SDK |
+| MCP | @modelcontextprotocol/sdk |
+| 定时任务 | node-cron |
+
+## 快速开始
 
 ```bash
+# 安装依赖
+npm install
+
+# 启动开发服务器
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# 构建
+npm run build
+
+# 启动 MCP server
+npm run mcp
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+打开 [http://localhost:3000](http://localhost:3000) 即可使用。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+数据库文件自动创建在 `data/allinai.db`，无需额外配置。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## AI 配置
 
-## Learn More
+进入 Settings 页面配置 AI provider：
 
-To learn more about Next.js, take a look at the following resources:
+- **Claude**: 填入 Anthropic API Key
+- **Claude Code**: 自动从 macOS Keychain 读取 OAuth token
+- **OpenAI**: 填入 OpenAI API Key
+- **自定义**: 填入 base URL 和 API Key
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 项目结构
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+├── app/
+│   ├── api/          # API 路由 (13 个端点)
+│   ├── digest/       # 每日简报页
+│   ├── pipeline/     # 看板页
+│   ├── projects/     # 项目详情页
+│   ├── report/       # 报告页
+│   ├── settings/     # 设置页
+│   └── page.tsx      # Dashboard 首页
+├── components/
+│   ├── ui/           # shadcn/ui 组件
+│   ├── dashboard/    # 仪表盘组件
+│   ├── pipeline/     # 看板组件
+│   ├── project/      # 项目组件
+│   └── ai/           # AI 相关组件
+├── lib/
+│   ├── db/           # 数据库 schema 与初始化
+│   ├── ai/           # AI provider 抽象层
+│   ├── cron/         # 后台任务
+│   ├── hooks/        # 自定义 React hooks
+│   └── i18n.ts       # 国际化
+├── mcp/              # MCP server 与工具
+└── types/            # TypeScript 类型定义
+```
 
-## Deploy on Vercel
+## License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
