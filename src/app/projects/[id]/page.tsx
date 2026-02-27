@@ -25,6 +25,8 @@ import {
   type Note,
 } from "@/types";
 import { AIAnalysisCard } from "@/components/ai/ai-analysis-card";
+import { GitScanCard } from "@/components/project/git-scan-card";
+import { NextStepCard } from "@/components/project/next-step-card";
 import {
   LineChart,
   Line,
@@ -75,12 +77,8 @@ export default function ProjectDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
-
-  // Note editing state
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteContent, setEditNoteContent] = useState("");
-
-  // Validation editing state
   const [editingValidationId, setEditingValidationId] = useState<string | null>(null);
   const [editValidationLabel, setEditValidationLabel] = useState("");
 
@@ -114,15 +112,13 @@ export default function ProjectDetailPage() {
     await updateProject(id, { stage });
     mutateProject();
     mutateTransitions();
-
-    // Celebrate stage advancement
     if (oldStage && stage !== "archived") {
       const STAGE_IDX: Record<string, number> = { idea: 0, development: 1, launch: 2, validation: 3, data_collection: 4 };
       if ((STAGE_IDX[stage] ?? 0) > (STAGE_IDX[oldStage] ?? 0)) {
         toast.success(
           locale === "zh"
-            ? `🚀 ${project?.name} 推进到「${stageLabel(stage)}」！`
-            : `🚀 ${project?.name} advanced to ${stageLabel(stage)}!`
+            ? `${project?.name} 推进到「${stageLabel(stage)}」！`
+            : `${project?.name} advanced to ${stageLabel(stage)}!`
         );
       }
     }
@@ -169,15 +165,14 @@ export default function ProjectDetailPage() {
     });
     mutateValidation();
     mutateProject();
-
     if (completing) {
       const newDone = completedValidation + 1;
       const total = validationItems.length;
       if (newDone === total) {
-        toast.success(locale === "zh" ? "🎯 验证清单全部完成！" : "🎯 All validation items complete!");
+        toast.success(locale === "zh" ? "验证清单全部完成！" : "All validation items complete!");
       } else {
         const pct = Math.round((newDone / total) * 100);
-        toast.success(locale === "zh" ? `✓ 验证进度 ${pct}%` : `✓ Validation ${pct}%`);
+        toast.success(locale === "zh" ? `验证进度 ${pct}%` : `Validation ${pct}%`);
       }
     }
   };
@@ -191,11 +186,6 @@ export default function ProjectDetailPage() {
     });
     mutateValidation();
     mutateProject();
-  };
-
-  const startEditValidation = (item: ValidationItem) => {
-    setEditingValidationId(item.id);
-    setEditValidationLabel(item.label);
   };
 
   const saveEditValidation = async () => {
@@ -224,10 +214,6 @@ export default function ProjectDetailPage() {
     mutateProject();
   };
 
-  const quickAddMetric = async (name: string) => {
-    setMetricName(name);
-  };
-
   const deleteMetric = async (metricId: string) => {
     if (!confirm(t("metrics.deleteConfirm"))) return;
     await fetch(`/api/projects/${id}/metrics`, {
@@ -250,11 +236,6 @@ export default function ProjectDetailPage() {
     setNewNote("");
     mutateNotes();
     mutateProject();
-  };
-
-  const startEditNote = (note: Note) => {
-    setEditingNoteId(note.id);
-    setEditNoteContent(note.content);
   };
 
   const saveEditNote = async () => {
@@ -283,35 +264,27 @@ export default function ProjectDetailPage() {
   const activeStages = STAGE_ORDER.filter((s) => s !== "archived");
   const completedValidation = validationItems.filter((i) => i.isCompleted).length;
 
-  // Build metrics chart data - grouped by metric name
+  // Metrics chart data
   const metricsChartData = (() => {
     if (projectMetrics.length === 0) return { data: [], metricNames: [] as string[] };
     const metricNames = [...new Set(projectMetrics.map((m) => m.name))];
     const sorted = [...projectMetrics].sort((a, b) => a.recordedAt - b.recordedAt);
-
-    // Group data points by date and spread metric names into columns
     const dateMap = new Map<string, Record<string, number | string>>();
     for (const m of sorted) {
       const dateKey = new Date(m.recordedAt).toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", { month: "short", day: "numeric" });
-      if (!dateMap.has(dateKey)) {
-        dateMap.set(dateKey, { date: dateKey });
-      }
+      if (!dateMap.has(dateKey)) dateMap.set(dateKey, { date: dateKey });
       dateMap.get(dateKey)![m.name] = m.value;
     }
     return { data: Array.from(dateMap.values()), metricNames };
   })();
 
-  // Common metric names
   const commonMetrics = [
-    t("metrics.visitors"),
-    t("metrics.signups"),
-    t("metrics.revenue"),
-    t("metrics.conversion"),
-    t("metrics.retention"),
+    t("metrics.visitors"), t("metrics.signups"), t("metrics.revenue"),
+    t("metrics.conversion"), t("metrics.retention"),
   ];
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+    <div className="p-6 space-y-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
@@ -368,27 +341,38 @@ export default function ProjectDetailPage() {
         </div>
       </Card>
 
+      {/* Next Step Guidance — the most important card on the page */}
+      <NextStepCard
+        stage={project.stage}
+        projectName={project.name}
+        validationDone={completedValidation}
+        validationTotal={validationItems.length}
+        onAdvance={handleStageChange}
+      />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column */}
+        {/* Left: Action-oriented */}
         <div className="space-y-6">
           {/* Description */}
-          <Card className="p-4">
-            <h2 className="font-semibold mb-2">{t("project.description")}</h2>
-            {isEditing ? (
-              <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={4} />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {project.description || t("project.noDescription")}
-              </p>
-            )}
-            {project.tags.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1">
-                {project.tags.map((tag: string) => (
-                  <Badge key={tag} variant="secondary">{tag}</Badge>
-                ))}
-              </div>
-            )}
-          </Card>
+          {(isEditing || project.description || project.tags.length > 0) && (
+            <Card className="p-4">
+              <h2 className="font-semibold mb-2">{t("project.description")}</h2>
+              {isEditing ? (
+                <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={4} />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {project.description || t("project.noDescription")}
+                </p>
+              )}
+              {project.tags.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1">
+                  {project.tags.map((tag: string) => (
+                    <Badge key={tag} variant="secondary">{tag}</Badge>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
 
           {/* Validation Checklist */}
           <Card className="p-4">
@@ -402,7 +386,7 @@ export default function ProjectDetailPage() {
             </div>
             {validationItems.length > 0 && (
               <Progress
-                value={validationItems.length > 0 ? (completedValidation / validationItems.length) * 100 : 0}
+                value={(completedValidation / validationItems.length) * 100}
                 className="h-1.5 mb-3"
               />
             )}
@@ -431,7 +415,7 @@ export default function ProjectDetailPage() {
                         {item.label}
                       </span>
                       <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
-                        <button onClick={() => startEditValidation(item)} className="text-xs text-muted-foreground hover:text-foreground">{t("validation.edit")}</button>
+                        <button onClick={() => { setEditingValidationId(item.id); setEditValidationLabel(item.label); }} className="text-xs text-muted-foreground hover:text-foreground">{t("validation.edit")}</button>
                         <button onClick={() => deleteValidationItem(item.id)} className="text-xs text-red-500 hover:text-red-700">{t("validation.delete")}</button>
                       </div>
                     </>
@@ -480,7 +464,7 @@ export default function ProjectDetailPage() {
                       <div className="flex items-center gap-2 mt-1">
                         <p className="text-xs text-muted-foreground">{formatDate(note.createdAt)}</p>
                         <div className="opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
-                          <button onClick={() => startEditNote(note)} className="text-xs text-muted-foreground hover:text-foreground">{t("notes.edit")}</button>
+                          <button onClick={() => { setEditingNoteId(note.id); setEditNoteContent(note.content); }} className="text-xs text-muted-foreground hover:text-foreground">{t("notes.edit")}</button>
                           <button onClick={() => deleteNote(note.id)} className="text-xs text-red-500 hover:text-red-700">{t("notes.delete")}</button>
                         </div>
                       </div>
@@ -502,18 +486,31 @@ export default function ProjectDetailPage() {
           </Card>
         </div>
 
-        {/* Right Column */}
+        {/* Right: Data & context */}
         <div className="space-y-6">
-          {/* Momentum */}
+          {/* Momentum + Info (merged) */}
           <Card className="p-4">
-            <h2 className="font-semibold mb-2">{t("project.momentum")}</h2>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mb-3">
               <Progress value={project.momentum} className="h-2.5 flex-1" />
               <span className="text-2xl font-bold">{Math.round(project.momentum)}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {t("project.lastUpdated", { time: timeAgo(project.updatedAt) })}
-            </p>
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{t("project.created")}</span>
+                <span>{formatDate(project.createdAt)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{t("project.stageEntered")}</span>
+                <span>{formatDate(project.stageEnteredAt)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{t("project.priority")}</span>
+                <span>{getPriorityLabel(project.priority, locale)} ({project.priority}/5)</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{t("project.lastUpdated", { time: timeAgo(project.updatedAt) })}</span>
+              </div>
+            </div>
           </Card>
 
           {/* Metrics */}
@@ -542,7 +539,6 @@ export default function ProjectDetailPage() {
                     </div>
                   ))}
                 </div>
-                {/* Chart - grouped by metric name */}
                 {metricsChartData.data.length > 1 && (
                   <>
                     <Separator className="my-3" />
@@ -574,10 +570,9 @@ export default function ProjectDetailPage() {
               <p className="text-sm text-muted-foreground">{t("metrics.noData")}</p>
             )}
             <Separator className="my-3" />
-            {/* Quick metric buttons */}
             <div className="flex flex-wrap gap-1 mb-2">
               {commonMetrics.filter((cm) => cm !== metricName).map((cm) => (
-                <Badge key={cm} variant="outline" className="cursor-pointer text-xs hover:bg-accent" onClick={() => quickAddMetric(cm)}>
+                <Badge key={cm} variant="outline" className="cursor-pointer text-xs hover:bg-accent" onClick={() => setMetricName(cm)}>
                   + {cm}
                 </Badge>
               ))}
@@ -589,53 +584,35 @@ export default function ProjectDetailPage() {
             </div>
           </Card>
 
-          {/* Timeline */}
-          <Card className="p-4">
-            <h2 className="font-semibold mb-3">{t("project.timeline")}</h2>
-            <div className="space-y-3">
-              {transitions.map((tr) => (
-                <div key={tr.id} className="flex items-start gap-3">
-                  <div className="mt-1.5 h-2 w-2 rounded-full bg-primary flex-shrink-0" />
-                  <div>
-                    <p className="text-sm">
-                      {tr.fromStage ? (
-                        <>
-                          <span className="text-muted-foreground">{stageLabel(tr.fromStage)}</span>
-                          {" → "}
-                          <span className="font-medium">{stageLabel(tr.toStage)}</span>
-                        </>
-                      ) : (
-                        <span className="font-medium">
-                          {t("project.createdIn", { stage: stageLabel(tr.toStage) })}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{formatDate(tr.transitionedAt)}</p>
-                    {tr.note && <p className="text-xs text-muted-foreground mt-0.5">{tr.note}</p>}
+          {/* Timeline (collapsed — only last 5) */}
+          {transitions.length > 0 && (
+            <Card className="p-4">
+              <h2 className="font-semibold mb-3">{t("project.timeline")}</h2>
+              <div className="space-y-3">
+                {transitions.slice(0, 5).map((tr) => (
+                  <div key={tr.id} className="flex items-start gap-3">
+                    <div className="mt-1.5 h-2 w-2 rounded-full bg-primary flex-shrink-0" />
+                    <div>
+                      <p className="text-sm">
+                        {tr.fromStage ? (
+                          <>
+                            <span className="text-muted-foreground">{stageLabel(tr.fromStage)}</span>
+                            {" → "}
+                            <span className="font-medium">{stageLabel(tr.toStage)}</span>
+                          </>
+                        ) : (
+                          <span className="font-medium">
+                            {t("project.createdIn", { stage: stageLabel(tr.toStage) })}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{formatDate(tr.transitionedAt)}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* Info */}
-          <Card className="p-4">
-            <h2 className="font-semibold mb-2">{t("project.info")}</h2>
-            <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">{t("project.created")}</span>
-                <span>{formatDate(project.createdAt)}</span>
+                ))}
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">{t("project.stageEntered")}</span>
-                <span>{formatDate(project.stageEnteredAt)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">{t("project.priority")}</span>
-                <span>{getPriorityLabel(project.priority, locale)} ({project.priority}/5)</span>
-              </div>
-            </div>
-          </Card>
+            </Card>
+          )}
 
           {/* AI Analysis */}
           <AIAnalysisCard projectId={project.id} />
@@ -645,129 +622,5 @@ export default function ProjectDetailPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-function GitScanCard({
-  projectId,
-  localPath,
-  onUpdate,
-}: {
-  projectId: string;
-  localPath?: string | null;
-  onUpdate: () => void;
-}) {
-  const { t, locale } = useLocale();
-  const [pathInput, setPathInput] = useState(localPath || "");
-  const [scanning, setScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<{
-    commits7d: number;
-    linesAdded: number;
-    linesRemoved: number;
-    branch: string;
-    summary: string;
-    momentumDelta: number;
-  } | null>(null);
-  const [editingPath, setEditingPath] = useState(!localPath);
-
-  const savePath = async () => {
-    await updateProject(projectId, { localPath: pathInput.trim() || null });
-    setEditingPath(false);
-    onUpdate();
-  };
-
-  const runScan = async () => {
-    setScanning(true);
-    setScanResult(null);
-    try {
-      const res = await fetch("/api/git-scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId }),
-      });
-      const data = await res.json();
-      if (data.error) {
-        alert(data.error);
-      } else {
-        setScanResult(data);
-        onUpdate();
-      }
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  return (
-    <Card className="p-4">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="font-semibold text-sm">{t("gitScan.title")}</h2>
-        {localPath && !editingPath && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs"
-            onClick={runScan}
-            disabled={scanning}
-          >
-            {scanning ? t("gitScan.scanning") : t("gitScan.scan")}
-          </Button>
-        )}
-      </div>
-
-      {/* Path config */}
-      {editingPath || !localPath ? (
-        <div className="space-y-2">
-          <Input
-            className="text-xs h-8"
-            placeholder={locale === "zh" ? "本地项目路径，如 /Users/you/project" : "Local path, e.g. /Users/you/project"}
-            value={pathInput}
-            onChange={(e) => setPathInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") savePath(); }}
-          />
-          <div className="flex gap-1">
-            <Button size="sm" className="h-7 text-xs" onClick={savePath}>
-              {t("common.save")}
-            </Button>
-            {localPath && (
-              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingPath(false)}>
-                {t("common.cancel")}
-              </Button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <div
-            className="text-xs text-muted-foreground font-mono cursor-pointer hover:text-foreground"
-            onClick={() => setEditingPath(true)}
-            title={locale === "zh" ? "点击修改路径" : "Click to edit path"}
-          >
-            {localPath}
-          </div>
-
-          {/* Scan results */}
-          {scanResult && (
-            <div className="mt-2 p-2.5 rounded-lg bg-muted/50 space-y-1.5 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">{t("gitScan.commits7d")}:</span>
-                <span className="font-medium">{scanResult.commits7d}</span>
-                <span className="text-muted-foreground ml-2">+{scanResult.linesAdded} / -{scanResult.linesRemoved}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">{locale === "zh" ? "分支" : "Branch"}:</span>
-                <span className="font-mono">{scanResult.branch}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">{locale === "zh" ? "动量变化" : "Momentum"}:</span>
-                <span className={scanResult.momentumDelta > 0 ? "text-green-600 font-medium" : scanResult.momentumDelta < 0 ? "text-red-500 font-medium" : "text-muted-foreground"}>
-                  {scanResult.momentumDelta > 0 ? "+" : ""}{scanResult.momentumDelta}
-                </span>
-              </div>
-              <p className="text-muted-foreground pt-1 border-t">{scanResult.summary}</p>
-            </div>
-          )}
-        </div>
-      )}
-    </Card>
   );
 }

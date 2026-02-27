@@ -43,6 +43,11 @@ export function PipelineBoard({ projects, onUpdate }: PipelineBoardProps) {
     onUpdate();
   };
 
+  const handleAdvance = async (projectId: string, nextStage: string) => {
+    await updateProject(projectId, { stage: nextStage });
+    onUpdate();
+  };
+
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <ScrollArea className="w-full">
@@ -90,6 +95,7 @@ export function PipelineBoard({ projects, onUpdate }: PipelineBoardProps) {
                             <ProjectCard
                               project={project}
                               isDragging={snapshot.isDragging}
+                              onAdvance={handleAdvance}
                             />
                           </div>
                         )}

@@ -156,8 +156,6 @@ const translations = {
     "settings.staleThresholds": "停滞告警阈值（天数）",
     "settings.momentumParams": "动量参数",
     "settings.decayRate": "每日衰减值",
-    "settings.updateBoost": "更新加成",
-    "settings.stageAdvanceBoost": "阶段推进加成",
     "settings.dataManagement": "数据管理",
     "settings.export": "导出所有数据",
     "settings.import": "导入数据",
@@ -342,6 +340,25 @@ const translations = {
     "gitScan.noTests": "缺少测试",
     "gitScan.hasCiCd": "已配置 CI/CD",
 
+    // Next Step Guidance
+    "nextStep.title": "下一步",
+    "nextStep.idea.action": "定义验证条件",
+    "nextStep.idea.why": "你的想法要怎么证明它值得做？列出 3 个能被验证的假设。",
+    "nextStep.development.action": "写代码",
+    "nextStep.development.why": "MVP 应该在 2 周内完成。今天能完成哪个最小功能？",
+    "nextStep.launch.action": "发布出去",
+    "nextStep.launch.why": "完美不存在。发到用户面前，看真实反馈。",
+    "nextStep.validation.action": "收集数据",
+    "nextStep.validation.why": "验证清单完成了吗？用户怎么说？数据证明了什么？",
+    "nextStep.data_collection.action": "做决策",
+    "nextStep.data_collection.why": "数据够了。继续投入还是止损？不要无限拖延。",
+    "nextStep.archived.action": "放下了",
+    "nextStep.archived.why": "这个项目已归档。如果想重启，先问自己：什么变了？",
+
+    // Pipeline Quick Actions
+    "pipeline.advance": "推进",
+    "pipeline.quickCommit": "今日承诺",
+
     // Nudge messages
     "nudge.stale": "「{name}」已在「{stage}」停留 {days} 天，是时候推进了！",
     "nudge.momentumDrop": "「{name}」动量偏低（{momentum}/100），做一件小事就能保持活力！",
@@ -490,8 +507,6 @@ const translations = {
     "settings.staleThresholds": "Staleness Thresholds (days before alert)",
     "settings.momentumParams": "Momentum Parameters",
     "settings.decayRate": "Decay rate per day",
-    "settings.updateBoost": "Update boost",
-    "settings.stageAdvanceBoost": "Stage advance boost",
     "settings.dataManagement": "Data Management",
     "settings.export": "Export All Data",
     "settings.import": "Import Data",
@@ -671,6 +686,25 @@ const translations = {
     "gitScan.todoCount": "{count} TODO/FIXME",
     "gitScan.noTests": "No tests",
     "gitScan.hasCiCd": "CI/CD configured",
+
+    // Next Step Guidance
+    "nextStep.title": "Next Step",
+    "nextStep.idea.action": "Define validation criteria",
+    "nextStep.idea.why": "How will you prove this idea is worth building? List 3 testable hypotheses.",
+    "nextStep.development.action": "Write code",
+    "nextStep.development.why": "MVP should ship in 2 weeks. What's the smallest feature you can finish today?",
+    "nextStep.launch.action": "Ship it",
+    "nextStep.launch.why": "Perfect doesn't exist. Put it in front of users and see real feedback.",
+    "nextStep.validation.action": "Collect data",
+    "nextStep.validation.why": "Is the validation checklist done? What do users say? What does the data prove?",
+    "nextStep.data_collection.action": "Make a decision",
+    "nextStep.data_collection.why": "You have enough data. Double down or cut losses? Don't drag forever.",
+    "nextStep.archived.action": "Let go",
+    "nextStep.archived.why": "This project is archived. To restart, ask yourself: what changed?",
+
+    // Pipeline Quick Actions
+    "pipeline.advance": "Advance",
+    "pipeline.quickCommit": "Commit today",
 
     // Nudge messages
     "nudge.stale": "\"{name}\" has been in {stage} for {days} days. Time to move it forward!",

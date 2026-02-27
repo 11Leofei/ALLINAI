@@ -23,8 +23,6 @@ export default function SettingsPage() {
   const [digestTime, setDigestTime] = useState("09:00");
   const [checkInterval, setCheckInterval] = useState(30);
   const [decayRate, setDecayRate] = useState(5);
-  const [updateBoost, setUpdateBoost] = useState(10);
-  const [stageAdvanceBoost, setStageAdvanceBoost] = useState(25);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -34,8 +32,6 @@ export default function SettingsPage() {
       setDigestTime(settings["nudge.dailyDigestTime"] ?? "09:00");
       setCheckInterval(settings["nudge.checkIntervalMinutes"] ?? 30);
       setDecayRate(settings["momentum.decayRatePerDay"] ?? 5);
-      setUpdateBoost(settings["momentum.updateBoost"] ?? 10);
-      setStageAdvanceBoost(settings["momentum.stageAdvanceBoost"] ?? 25);
     }
   }, [settings]);
 
@@ -49,8 +45,6 @@ export default function SettingsPage() {
         "nudge.dailyDigestTime": digestTime,
         "nudge.checkIntervalMinutes": checkInterval,
         "momentum.decayRatePerDay": decayRate,
-        "momentum.updateBoost": updateBoost,
-        "momentum.stageAdvanceBoost": stageAdvanceBoost,
       }),
     });
     mutate();
@@ -172,14 +166,6 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3">
           <label className="text-sm flex-1">{t("settings.decayRate")}</label>
           <Input type="number" value={decayRate} onChange={(e) => setDecayRate(parseInt(e.target.value) || 1)} className="w-20" />
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="text-sm flex-1">{t("settings.updateBoost")}</label>
-          <Input type="number" value={updateBoost} onChange={(e) => setUpdateBoost(parseInt(e.target.value) || 1)} className="w-20" />
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="text-sm flex-1">{t("settings.stageAdvanceBoost")}</label>
-          <Input type="number" value={stageAdvanceBoost} onChange={(e) => setStageAdvanceBoost(parseInt(e.target.value) || 1)} className="w-20" />
         </div>
       </Card>
 

@@ -3,10 +3,10 @@ import { db } from "@/lib/db";
 import { projects, dailyCommitments, settings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { scanAllProjects } from "./git-scanner";
+import { checkNudges } from "@/lib/nudge/engine";
 import {
   notifyMorningCommitment,
   notifyEveningCheckIn,
-  notifyStaleProject,
   notifyGitScanComplete,
   notifyMomentumDrop,
 } from "./notifier";
@@ -82,26 +82,11 @@ function runStaleCheck() {
   const enabled = getSetting("nudge.enabled");
   if (enabled === false) return;
 
-  const thresholds = getSetting("nudge.staleThresholdDays") as Record<string, number> | null;
-  if (!thresholds) return;
-
-  const allProjects = db
-    .select()
-    .from(projects)
-    .all()
-    .filter((p) => p.stage !== "archived");
-
-  const now = Date.now();
-  for (const p of allProjects) {
-    const threshold = thresholds[p.stage] || 5;
-    const days = Math.floor((now - p.stageEnteredAt) / (1000 * 60 * 60 * 24));
-    if (days >= threshold) {
-      // Only notify once per day per project
-      const stageLabel = p.stage;
-      notifyStaleProject(p.name, days, stageLabel);
-      break; // Only one stale notification at a time to avoid spam
-    }
-  }
+  console.log("[ALLINAI Cron] Running nudge check (stale + momentum)...");
+  // checkNudges() handles stale, momentum_drop, milestone, and daily_digest
+  // and writes all results to the nudges DB table for UI display
+  const results = checkNudges();
+  console.log(`[ALLINAI Cron] Generated ${results.length} nudges`);
 }
 
 export function initScheduler() {

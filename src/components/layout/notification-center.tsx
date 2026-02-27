@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import useSWR from "swr";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,14 @@ export function NotificationCenter() {
     refreshInterval: 60000,
   });
   const [open, setOpen] = useState(false);
+  const checkedRef = useRef(false);
+
+  // Trigger a nudge check once on mount so the bell has data
+  useEffect(() => {
+    if (checkedRef.current) return;
+    checkedRef.current = true;
+    fetch("/api/nudges", { method: "POST" }).then(() => mutate());
+  }, [mutate]);
 
   const unreadNudges = nudges.filter((n) => !n.dismissed);
   const unreadCount = unreadNudges.length;

@@ -11,6 +11,7 @@ import type { Project } from "@/types";
 interface ProjectCardProps {
   project: Project;
   isDragging?: boolean;
+  onAdvance?: (projectId: string, nextStage: string) => void;
 }
 
 function getMomentumColor(momentum: number): string {
@@ -30,8 +31,17 @@ function getHealthDot(project: Project): { color: string; label: string } {
   return { color: "bg-yellow-400", label: "OK" };
 }
 
-export function ProjectCard({ project, isDragging }: ProjectCardProps) {
-  const { t, locale } = useLocale();
+import type { ProjectStage } from "@/types";
+
+const NEXT_STAGE: Partial<Record<ProjectStage, ProjectStage>> = {
+  idea: "development",
+  development: "launch",
+  launch: "validation",
+  validation: "data_collection",
+};
+
+export function ProjectCard({ project, isDragging, onAdvance }: ProjectCardProps) {
+  const { t, stageLabel, locale } = useLocale();
   const isStale =
     project.stage !== "archived" &&
     Date.now() - project.updatedAt > 3 * 24 * 60 * 60 * 1000;
@@ -54,7 +64,7 @@ export function ProjectCard({ project, isDragging }: ProjectCardProps) {
   return (
     <Link href={`/projects/${project.id}`}>
       <div
-        className={`rounded-lg border bg-card p-3 shadow-sm transition-all hover:shadow-md cursor-pointer ${
+        className={`group rounded-lg border bg-card p-3 shadow-sm transition-all hover:shadow-md cursor-pointer ${
           isDragging ? "rotate-2 shadow-lg opacity-90" : ""
         } ${isStale ? "border-orange-300 dark:border-orange-700" : ""}`}
       >
@@ -126,10 +136,24 @@ export function ProjectCard({ project, isDragging }: ProjectCardProps) {
           </div>
         )}
 
-        {/* Updated time */}
-        <p className="mt-2 text-xs text-muted-foreground">
-          {t("card.updatedAgo", { time: timeAgo(project.updatedAt) })}
-        </p>
+        {/* Footer: time + advance */}
+        <div className="mt-2 flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">
+            {t("card.updatedAgo", { time: timeAgo(project.updatedAt) })}
+          </p>
+          {onAdvance && NEXT_STAGE[project.stage] && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onAdvance(project.id, NEXT_STAGE[project.stage]!);
+              }}
+              className="opacity-0 group-hover:opacity-100 text-xs text-primary hover:underline transition-opacity"
+            >
+              {stageLabel(NEXT_STAGE[project.stage]!)} →
+            </button>
+          )}
+        </div>
       </div>
     </Link>
   );
