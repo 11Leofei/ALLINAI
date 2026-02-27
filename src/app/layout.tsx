@@ -5,7 +5,6 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Providers } from "@/components/providers";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { SmartCommitmentBar } from "@/components/commitment/smart-bar";
-import { QuickActionFAB } from "@/components/layout/quick-action-fab";
 import { Toaster } from "@/components/ui/sonner";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { KeyboardShortcuts } from "@/components/layout/keyboard-shortcuts";
@@ -51,7 +50,6 @@ export default function RootLayout({
             </main>
           </div>
           <CommandPalette />
-          <QuickActionFAB />
           <KeyboardShortcuts />
           <Toaster position="top-center" richColors closeButton />
         </Providers>

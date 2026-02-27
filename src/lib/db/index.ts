@@ -146,8 +146,6 @@ const defaultSettings: Record<string, unknown> = {
   "nudge.dailyDigestTime": "09:00",
   "nudge.checkIntervalMinutes": 30,
   "momentum.decayRatePerDay": 5,
-  "momentum.updateBoost": 10,
-  "momentum.stageAdvanceBoost": 25,
 };
 
 const insertSetting = sqlite.prepare(

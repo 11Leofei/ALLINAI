@@ -26,7 +26,6 @@ import {
 } from "@/types";
 import { AIAnalysisCard } from "@/components/ai/ai-analysis-card";
 import { GitScanCard } from "@/components/project/git-scan-card";
-import { NextStepCard } from "@/components/project/next-step-card";
 import {
   LineChart,
   Line,
@@ -311,7 +310,7 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* Stage Progress */}
+      {/* Stage Progress + Next Step (merged) */}
       <Card className="p-4">
         <div className="flex items-center gap-1">
           {activeStages.map((stage, idx) => {
@@ -339,40 +338,45 @@ export default function ProjectDetailPage() {
             );
           })}
         </div>
+        {/* Inline next-step guidance */}
+        <div className="mt-3 pt-3 border-t flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">{t(`nextStep.${project.stage}.action`)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{t(`nextStep.${project.stage}.why`)}</p>
+          </div>
+          {(() => {
+            const NEXT: Record<string, string> = { idea: "development", development: "launch", launch: "validation", validation: "data_collection" };
+            const next = NEXT[project.stage];
+            return next ? (
+              <Button size="sm" variant="outline" onClick={() => handleStageChange(next)}>
+                {stageLabel(next)} →
+              </Button>
+            ) : null;
+          })()}
+        </div>
       </Card>
-
-      {/* Next Step Guidance — the most important card on the page */}
-      <NextStepCard
-        stage={project.stage}
-        projectName={project.name}
-        validationDone={completedValidation}
-        validationTotal={validationItems.length}
-        onAdvance={handleStageChange}
-      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Action-oriented */}
         <div className="space-y-6">
           {/* Description */}
-          {(isEditing || project.description || project.tags.length > 0) && (
-            <Card className="p-4">
-              <h2 className="font-semibold mb-2">{t("project.description")}</h2>
-              {isEditing ? (
-                <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={4} />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {project.description || t("project.noDescription")}
-                </p>
-              )}
-              {project.tags.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1">
-                  {project.tags.map((tag: string) => (
-                    <Badge key={tag} variant="secondary">{tag}</Badge>
-                  ))}
-                </div>
-              )}
-            </Card>
-          )}
+          <Card className="p-4">
+            <h2 className="font-semibold mb-2">{t("project.description")}</h2>
+            {isEditing ? (
+              <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={4} />
+            ) : (
+              <p className="text-sm text-muted-foreground cursor-pointer hover:text-foreground" onClick={startEdit}>
+                {project.description || t("project.noDescription")}
+              </p>
+            )}
+            {project.tags.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1">
+                {project.tags.map((tag: string) => (
+                  <Badge key={tag} variant="secondary">{tag}</Badge>
+                ))}
+              </div>
+            )}
+          </Card>
 
           {/* Validation Checklist */}
           <Card className="p-4">
